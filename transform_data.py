@@ -9,8 +9,8 @@ class TransformData:
     self.words_index = []
     self.labels_index = []
     if corpuses is not None or len(corpuses) != 0:
-      for _, corpus in enumerate(corpuses):
-        base_path = 'corpus/' + corpus + '_training'
+      for _, corpus_base_path in enumerate(corpuses):
+        base_path = 'corpus/' + corpus_base_path
         self.read_words(base_path + '_words.txt')
         self.read_labels(base_path + '_labels.txt')
 

@@ -132,76 +132,102 @@ class SegDNN:
         self.accuracy = tf.reduce_mean(tf.cast(tf.equal(self.predictions, tf.cast(self.y, tf.int64)), tf.float32))
         self.params = [self.w1, self.b1, self.w2, self.b2, self.w3, self.b3]
 
-    def train_optimized(self, epochs=10, early_stopping_patience=3):
+    def train_optimized(self, train_data, validation_data, epochs=10, early_stopping_patience=3):
+        x_data, y_data = train_data
+        x_val, y_val = validation_data
+        
         with tf.compat.v1.Session() as sess:
             sess.run(tf.compat.v1.global_variables_initializer())
             
-            x_data = self.tran.whole_words_batch
-            y_data = self.tran.whole_labels_batch
+            saver = tf.compat.v1.train.Saver(self.params + [self.embeddings, self.A, self.init_A], max_to_keep=1)
             
-            saver = tf.compat.v1.train.Saver(self.params + [self.embeddings, self.A, self.init_A], max_to_keep=100)
+            print("🚀 开始优化训练 (包含验证)...")
             
-            print("🚀 开始优化训练 (使用真实数据)...")
-            
-            best_loss = float('inf')
+            best_val_loss = float('inf')
             patience_counter = 0
-            train_losses = []
-            train_accuracies = []
             
             for epoch in range(epochs):
                 epoch_start = time.time()
-                total_loss, total_acc, batch_count = 0, 0, 0
                 
+                # --- 训练阶段 ---
+                total_train_loss, total_train_acc, train_batch_count = 0, 0, 0
                 num_batches = math.ceil(len(x_data) / self.batch_size)
 
                 print(f"\nEpoch {epoch+1}/{epochs}")
+                print("  Training...")
                 for i, (batch_x, batch_y) in enumerate(self._get_batches((x_data, y_data))):
                     feed_dict = {self.x: batch_x, self.y: batch_y, self.is_training: True}
                     _, loss_val, acc_val = sess.run([self.train_op, self.total_loss, self.accuracy], feed_dict)
-                    total_loss += loss_val
-                    total_acc += acc_val
-                    batch_count += 1
+                    total_train_loss += loss_val
+                    total_train_acc += acc_val
+                    train_batch_count += 1
                     
-                    # 实时进度条
                     progress = (i + 1) / num_batches
                     bar_len = 30
                     filled_len = int(round(bar_len * progress))
                     bar = '█' * filled_len + '-' * (bar_len - filled_len)
-                    
-                    print(f"  [{bar}] {i+1}/{num_batches} - loss: {total_loss/batch_count:.4f}", end='\r')
+                    print(f"    [{bar}] {i+1}/{num_batches} - loss: {total_train_loss/train_batch_count:.4f}", end='\r')
+                print() 
 
-                print() # 换行
-                avg_loss = total_loss / batch_count
-                avg_acc = total_acc / batch_count
-                
-                train_losses.append(avg_loss)
-                train_accuracies.append(avg_acc)
+                avg_train_loss = total_train_loss / train_batch_count
+                avg_train_acc = total_train_acc / train_batch_count
+
+                # --- 验证阶段 ---
+                print("  Validating...")
+                total_val_loss, total_val_acc, val_batch_count = 0, 0, 0
+                num_val_batches = math.ceil(len(x_val) / self.batch_size)
+                for i, (batch_x, batch_y) in enumerate(self._get_batches((x_val, y_val), shuffle=False)):
+                    feed_dict = {self.x: batch_x, self.y: batch_y, self.is_training: False}
+                    loss_val, acc_val = sess.run([self.total_loss, self.accuracy], feed_dict)
+                    total_val_loss += loss_val
+                    total_val_acc += acc_val
+                    val_batch_count += 1
+                    
+                    progress = (i + 1) / num_val_batches
+                    bar_len = 30
+                    filled_len = int(round(bar_len * progress))
+                    bar = '█' * filled_len + '-' * (bar_len - filled_len)
+                    print(f"    [{bar}] {i+1}/{num_val_batches}", end='\r')
+                print()
+
+                avg_val_loss = total_val_loss / val_batch_count
+                avg_val_acc = total_val_acc / val_batch_count
                 
                 epoch_time = time.time() - epoch_start
-                print(f'Epoch {epoch+1:2d}/{epochs} 总结 - Loss: {avg_loss:.4f} - Acc: {avg_acc:.4f} - Time: {epoch_time:.1f}s')
                 
-                if avg_loss < best_loss:
-                    best_loss = avg_loss
+                print("-" * 50)
+                print(f'Epoch {epoch+1:2d}/{epochs} 总结:')
+                print(f'  Time: {epoch_time:.1f}s')
+                print(f'  Train Loss: {avg_train_loss:.4f}, Train Acc: {avg_train_acc:.4f}')
+                print(f'  Valid Loss: {avg_val_loss:.4f}, Valid Acc: {avg_val_acc:.4f}')
+                print("-" * 50)
+
+                if avg_val_loss < best_val_loss:
+                    best_val_loss = avg_val_loss
                     patience_counter = 0
+                    print(f"🎉 新的最佳验证损失: {best_val_loss:.4f}。正在保存模型...")
                     saver.save(sess, 'model/best_model.ckpt')
                 else:
                     patience_counter += 1
+                    print(f"验证损失未改善。容忍计数: {patience_counter}/{early_stopping_patience}")
                     if patience_counter >= early_stopping_patience:
                         print(f'Early stopping at epoch {epoch+1}')
                         break
             
-            print(f'✅ 训练完成! 最佳Loss: {best_loss:.4f}')
-            return train_losses, train_accuracies
+            print(f'✅ 训练完成! 最佳验证Loss: {best_val_loss:.4f}')
 
-    def _get_batches(self, data):
+    def _get_batches(self, data, shuffle=True):
         x_data, y_data = data
         num_samples = len(x_data)
-        indices = np.random.permutation(num_samples)
-        x_data, y_data = x_data[indices], y_data[indices]
+        
+        indices = np.arange(num_samples)
+        if shuffle:
+            np.random.shuffle(indices)
         
         for i in range(0, num_samples, self.batch_size):
             end_idx = min(i + self.batch_size, num_samples)
-            yield x_data[i:end_idx], y_data[i:end_idx]
+            batch_indices = indices[i:end_idx]
+            yield x_data[batch_indices], y_data[batch_indices]
 
     def seg(self, sentence, model_path='model/best_model.ckpt', debug=False):
         try:

@@ -26,30 +26,38 @@ def ensure_output_dir():
         os.makedirs('tmp')
 
 def check_training_data():
-    """检查训练数据文件是否存在"""
-    required_files = [
-        'corpus/dict.utf8',
-        'corpus/dnn/words_batch_flat.npy',
-        'corpus/dnn/labels_batch_flat.npy'
-    ]
+    """检查训练和验证数据文件是否存在"""
+    required_files = {
+        '训练集': [
+            'corpus/dnn/words_batch_flat.npy',
+            'corpus/dnn/labels_batch_flat.npy'
+        ],
+        '验证集': [
+            'corpus/dnn/words_batch_flat_val.npy',
+            'corpus/dnn/labels_batch_flat_val.npy'
+        ],
+        '词典': ['corpus/dict.utf8']
+    }
     
-    print("🔍 检查训练数据文件:")
-    missing_files = []
+    print("🔍 检查数据文件:")
+    all_found = True
     
-    for file_path in required_files:
-        if os.path.exists(file_path):
-            size_mb = os.path.getsize(file_path) / 1024 / 1024
-            print(f"✅ {file_path} ({size_mb:.1f}MB)")
-        else:
-            print(f"❌ {file_path}")
-            missing_files.append(file_path)
+    for set_name, files in required_files.items():
+        print(f"  - {set_name}:")
+        for file_path in files:
+            if os.path.exists(file_path):
+                size_mb = os.path.getsize(file_path) / 1024 / 1024
+                print(f"    ✅ {file_path} ({size_mb:.1f}MB)")
+            else:
+                print(f"    ❌ {file_path}")
+                all_found = False
     
-    if missing_files:
-        print(f"\n⚠️  缺少 {len(missing_files)} 个训练数据文件!")
+    if not all_found:
+        print(f"\n⚠️  缺少数据文件!")
         print("请先运行: python3 init.py")
         return False
     
-    print("✅ 所有训练数据文件就绪!")
+    print("✅ 所有数据文件就绪!")
     return True
 
 def train_dnn_model(epochs=10):
@@ -58,40 +66,46 @@ def train_dnn_model(epochs=10):
     print("=" * 50)
     
     try:
+        from transform_data_dnn import TransformDataDNN
         import tensorflow as tf
         tf.compat.v1.reset_default_graph()
 
+        print("正在加载数据...")
+        train_loader = TransformDataDNN(constant.DNN_SKIP_WINDOW, dataset_type='training')
+        val_loader = TransformDataDNN(constant.DNN_SKIP_WINDOW, dataset_type='validation')
+
+        train_data = (train_loader.whole_words_batch, train_loader.whole_labels_batch)
+        validation_data = (val_loader.whole_words_batch, val_loader.whole_labels_batch)
+
         print("正在初始化DNN模型...")
-        dnn_model = SegDNN(constant.VOCAB_SIZE, 50, constant.DNN_SKIP_WINDOW)
+        # 注意：这里的embed_size需要和seg_dnn.py中一致
+        dnn_model = SegDNN(constant.VOCAB_SIZE, 100, constant.DNN_SKIP_WINDOW)
         
         print(f"模型参数:")
-        print(f"  - 词汇表大小: {constant.VOCAB_SIZE}")
-        print(f"  - 嵌入维度: 50")
-        print(f"  - 网络结构: 512 -> 256 -> 4")
-        print(f"  - 批大小: 32")
+        print(f"  - 词汇表大小: {dnn_model.vocab_size}")
+        print(f"  - 嵌入维度: {dnn_model.embed_size}")
+        print(f"  - 网络结构: {dnn_model.h1} -> {dnn_model.h2} -> {dnn_model.tags_count}")
+        print(f"  - 批大小: {dnn_model.batch_size}")
         print(f"  - 训练轮数: {epochs}")
         
         start_time = time.time()
-        losses, accuracies = dnn_model.train_optimized(epochs=epochs, early_stopping_patience=3)
+        dnn_model.train_optimized(
+            train_data=train_data, 
+            validation_data=validation_data, 
+            epochs=epochs, 
+            early_stopping_patience=3
+        )
         training_time = time.time() - start_time
         
         print(f"\n✅ DNN模型训练完成!")
         print(f"总训练时间: {training_time:.1f}秒")
         
-        if losses:
-            print(f"最终损失: {losses[-1]:.4f}")
-            print(f"最终准确率: {accuracies[-1]:.4f}")
-            log_path = f'output/dnn_training_log_{datetime.now().strftime("%Y%m%d_%H%M%S")}.txt'
-            with open(log_path, 'w', encoding='utf-8') as f:
-                f.write(f"DNN模型训练日志\n"
-                        f"训练时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-                        f"训练轮数: {len(losses)}/{epochs}\n"
-                        f"总耗时: {training_time:.1f}秒\n"
-                        f"最终损失: {losses[-1]:.4f}\n"
-                        f"最终准确率: {accuracies[-1]:.4f}\n"
-                        f"损失历史: {losses}\n"
-                        f"准确率历史: {accuracies}\n")
-            print(f"训练日志保存到: {log_path}")
+        log_path = f'output/dnn_training_log_{datetime.now().strftime("%Y%m%d_%H%M%S")}.txt'
+        with open(log_path, 'w', encoding='utf-8') as f:
+            f.write(f"DNN模型训练日志\n"
+                    f"训练时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    f"总耗时: {training_time:.1f}秒\n")
+        print(f"训练日志保存到: {log_path}")
         return True
         
     except Exception as e:
@@ -119,7 +133,8 @@ def test_trained_models():
         import tensorflow as tf
         tf.compat.v1.reset_default_graph()
         
-        cws = SegDNN(constant.VOCAB_SIZE, 50, constant.DNN_SKIP_WINDOW)
+        # 注意：这里的embed_size需要和seg_dnn.py中一致
+        cws = SegDNN(constant.VOCAB_SIZE, 100, constant.DNN_SKIP_WINDOW)
         
         for sentence in test_sentences:
             print("-" * 40)
