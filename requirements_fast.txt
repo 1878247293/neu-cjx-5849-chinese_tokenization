@@ -1,0 +1,15 @@
+# DNN_CWS 项目依赖包列表（快速版本）
+# 使用CPU版本的TensorFlow，下载更快
+
+# 核心依赖 - CPU版本（更小更快）
+tensorflow-cpu>=2.0.0
+numpy>=1.18.0
+
+# 可选依赖
+matplotlib>=3.0.0
+scikit-learn>=0.24.0
+
+# 开发和测试依赖
+pytest>=6.0.0
+
+# 如果你需要GPU支持，请将tensorflow-cpu替换为tensorflow 
