@@ -14,9 +14,9 @@ class TransformDataDNN(TransformData):
     :param dataset_type: 数据集类型, 'training' 或 'validation'
     """
     if dataset_type == 'training':
-        corpus_base_name = 'pku_training'
+        corpus_base_name = 'training'
     else:
-        corpus_base_name = 'pku_validation'
+        corpus_base_name = 'validation'
     
     TransformData.__init__(self, 'corpus/dict.utf8', [corpus_base_name])
     
@@ -37,34 +37,30 @@ class TransformDataDNN(TransformData):
         self.labels_batch_flat = np.load(self.labels_batch_flat_path)
     else:
         print(f"正在为 {dataset_type} 生成新数据...")
-        _, self.labels_batch_flat = self.generate_batch()
-        # 注意: generate_batch现在只返回flat数据，因为这是唯一被使用的
-        self.words_batch_flat = self.generate_words_batch_flat()
+        self.words_batch_flat, self.labels_batch_flat = self.generate_batch_flat()
 
     self.words_count = len(self.labels_batch_flat)
-    self.whole_words_batch = self.words_batch_flat.reshape([self.words_count, self.window_length])
-    self.whole_labels_batch = self.labels_batch_flat.reshape([self.words_count])
+    self.whole_words_batch = self.words_batch_flat.reshape([-1, self.window_length])
+    self.whole_labels_batch = self.labels_batch_flat.reshape([-1])
 
-  def generate_words_batch_flat(self):
-      """只生成和返回展平的词汇批次数据"""
+  def generate_batch_flat(self):
+      """同时生成并返回展平的词汇和标签批次数据，确保一致性"""
       words_batch = []
-      for words in self.words_index:
+      labels_batch = []
+      
+      for words, labels in zip(self.words_index, self.labels_index):
           if len(words) < self.skip_window:
               continue
+          
           extend_words = [1] * self.skip_window + words + [2] * self.skip_window
+          
           for i in range(len(words)):
               context = extend_words[i : i + self.window_length]
               words_batch.extend(context)
-      return np.array(words_batch, dtype=np.int32)
-
-  def generate_batch(self):
-    # 此方法现在只处理标签，词汇由新的专用方法处理
-    words_batch = []
-    labels_batch = []
-    for _,labels in enumerate(self.labels_index):
-      labels_batch.extend(labels)
-
-    return np.array(words_batch), np.array(labels_batch)
+          
+          labels_batch.extend(labels)
+          
+      return np.array(words_batch, dtype=np.int32), np.array(labels_batch, dtype=np.int32)
 
   def generate_exe(self):
     # 只保存flat数据，因为这是唯一被使用的

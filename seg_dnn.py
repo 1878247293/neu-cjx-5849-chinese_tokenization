@@ -13,13 +13,15 @@ class SegDNN:
     """
     优化版本的DNN中文分词器 - TensorFlow 2.x兼容
     """
-    def __init__(self, vocab_size, embed_size, skip_window):
+    def __init__(self, vocab_size, embed_size, skip_window, initial_lr=0.001, decay_steps=1000, decay_rate=0.95):
         self.vocab_size = vocab_size
         self.embed_size = 100 # <--- 增加嵌入维度
         self.skip_window = skip_window
         
         # Hyperparameters
-        self.alpha = 0.001
+        self.initial_lr = initial_lr
+        self.lr_decay_steps = decay_steps
+        self.lr_decay_rate = decay_rate
         self.h1 = 600 # <--- 增加隐藏层神经元
         self.h2 = 300 # <--- 增加隐藏层神经元
         self.tags_count = 4
@@ -118,10 +120,17 @@ class SegDNN:
         self.total_loss = self.loss + l2_loss
         
         # Optimizer
-        global_step = tf.Variable(0, trainable=False)
-        learning_rate = tf.compat.v1.train.exponential_decay(self.alpha, global_step, 1000, 0.95, staircase=True)
-        self.optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate)
-        self.train_op = self.optimizer.minimize(self.total_loss, global_step=global_step)
+        self.global_step = tf.Variable(0, trainable=False, name='global_step')
+        self.learning_rate = tf.compat.v1.train.exponential_decay(
+            self.initial_lr, 
+            self.global_step, 
+            self.lr_decay_steps, 
+            self.lr_decay_rate, 
+            staircase=True,
+            name='learning_rate'
+        )
+        self.optimizer = tf.compat.v1.train.AdamOptimizer(self.learning_rate)
+        self.train_op = self.optimizer.minimize(self.total_loss, global_step=self.global_step)
         
         # CRF parameters
         self.A = tf.Variable(tf.compat.v1.truncated_normal([4, 4], stddev=0.1), name='A')

@@ -150,8 +150,8 @@ class PrepareData:
     print(f"训练集数据已写入: {self.output_words_file}, {self.output_labels_file}")
     
     # 写入验证集文件
-    validation_words_file = self.output_words_file.replace('_training_', '_validation_')
-    validation_labels_file = self.output_labels_file.replace('_training_', '_validation_')
+    validation_words_file = self.output_words_file.replace('training', 'validation')
+    validation_labels_file = self.output_labels_file.replace('training', 'validation')
     write_data(validation_words_file, validation_labels_file, validation_words_index, validation_labels_index)
     print(f"验证集数据已写入: {validation_words_file}, {validation_labels_file}")
 
@@ -163,6 +163,9 @@ class PrepareData:
       
     if self.output_raw_file:
       self.build_raw_corpus(self.train_sentences, self.raw_file)
+      validation_raw_file = self.raw_file.replace('training', 'validation')
+      self.build_raw_corpus(self.validation_sentences, validation_raw_file)
+      print(f"原始训练集和验证集语料已写入。")
 
 if __name__ == '__main__':
   prepare_pku = PrepareData(constant.VOCAB_SIZE, 'corpus/pku_training.utf8', 'corpus/pku_training_words.txt',
