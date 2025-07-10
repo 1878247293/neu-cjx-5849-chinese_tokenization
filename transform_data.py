@@ -28,14 +28,20 @@ class TransformData:
     file = open(path, 'r', encoding='utf-8')
     words = file.read().splitlines()
     for index, word in enumerate(words):
-      self.words_index.append(list(map(int, word.split(' '))))
+      if word.strip():  # 只处理非空行
+        word_parts = [part for part in word.split(' ') if part.strip()]  # 过滤空字符串
+        if word_parts:  # 确保有有效的词索引
+          self.words_index.append(list(map(int, word_parts)))
     file.close()
 
   def read_labels(self, path):
     file = open(path, 'r', encoding='utf-8')
     labels = file.read().splitlines()
     for label in labels:
-      self.labels_index.append(list(map(int, label.split(' '))))
+      if label.strip():  # 只处理非空行
+        label_parts = [part for part in label.split(' ') if part.strip()]  # 过滤空字符串
+        if label_parts:  # 确保有有效的标签索引
+          self.labels_index.append(list(map(int, label_parts)))
     file.close()
 
   def generate_batch(self):

@@ -2,11 +2,8 @@
 
 ## 参考论文：
 
-* [deep learning for chinese word segmentation and pos tagging](www.aclweb.org/anthology/D13-1061) （已完全实现，文件[`seg_dnn.py`](https://github.com/supercoderhawk/DNN_CWS/blob/master/seg_dnn.py)）
-
-## Todo List
-
-1.实现验证集
+* [deep learning for chinese word segmentation and pos tagging](www.aclweb.org/anthology/D13-1061) 
+## Todo List 
 2.目前优化后的DNN处理后的结果还是不太准
 
 
