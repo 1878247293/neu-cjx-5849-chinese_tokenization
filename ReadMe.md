@@ -5,7 +5,7 @@
 * [deep learning for chinese word segmentation and pos tagging](www.aclweb.org/anthology/D13-1061) 
 ## Todo List 
 2.目前优化后的DNN处理后的结果还是不太准
-
+1.由于DNN的局限性，所以语料不要整太多，这里可以尝试退回之前预料更新前的版本
 
 ## 项目概述
 本项目是一个基于深度学习的中文分词系统，使用TensorFlow实现的神经网络模型：
